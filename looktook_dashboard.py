@@ -12,8 +12,6 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="LookTook 营收测算", page_icon="📊", layout="wide")
 
 # ==================== 侧边栏参数配置 ====================
-st.sidebar.markdown('<p style="font-size:10px;color:#888;margin:0;padding:0;">向下滚动调整参数</p>', unsafe_allow_html=True)
-st.sidebar.button("🔄 重置全部参数", type="primary", use_container_width=True, disabled=True)
 st.sidebar.divider()
 st.sidebar.header("📐 全局参数配置")
 st.sidebar.caption("💡 刷新页面可重置所有参数为默认值")
@@ -138,8 +136,10 @@ total_investment = opening_cost + (hard_fitout_unit + soft_fitout_unit) * area -
 hard_fitout_total = hard_fitout_unit * area
 soft_fitout_total = soft_fitout_unit * area
 
-# ==================== 时间维度选择 ====================
+# ==================== 主标题 ====================
 st.title("📊 LookTook 营收成本测算看板")
+
+# ==================== 时间维度选择 ====================
 view_tabs = st.tabs([
     "📊 年度数据", "🍂 季度数据", "📆 月度数据",
     "📅 日均数据", "🔍 全场景分析", "💸 一次性支出"
@@ -328,7 +328,7 @@ with view_tabs[0]:
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("年毛利", f"¥{year_gross:,.0f}")
         col2.metric("年总成本", f"¥{year_cost:,.0f}")
-        col3.metric("年净利润", f"¥{year_net:,.0f}", delta=f"{year_net:,.0f}")
+        col3.metric("年净利润", f"¥{year_net:,.0f}", delta=f"¥{year_net:,.0f}")
         col4.metric("回本周期", f"{looktook_payback:.1f}个月" if year_net > 0 else "亏损中")
 
         st.divider()
@@ -466,7 +466,7 @@ with view_tabs[2]:
         col1.metric("天数", f"{month_data['天数']}天")
         col2.metric("月毛利", f"¥{month_data['月毛利']:,.0f}")
         col3.metric("月总成本", f"¥{month_data['月总成本']:,.0f}")
-        col4.metric("月净利润", f"¥{month_data['月净利润']:,.0f}", delta=f"{month_data['月净利润']:,.0f}")
+        col4.metric("月净利润", f"¥{month_data['月净利润']:,.0f}", delta=f"¥{month_data['月净利润']:,.0f}")
 
         st.divider()
 
@@ -572,7 +572,7 @@ with view_tabs[3]:
     col1.metric("总进店人数", f"{m['总进店人数']:.0f}人")
     col2.metric("日毛利", f"¥{m['日毛利']:,.0f}")
     col3.metric("日总成本", f"¥{m['日总成本']:,.0f}")
-    col4.metric("日净利润", f"¥{m['日净利润']:,.0f}", delta=f"{m['日净利润']:,.0f}")
+    col4.metric("日净利润", f"¥{m['日净利润']:,.0f}", delta=f"¥{m['日净利润']:,.0f}")
 
     st.divider()
 
