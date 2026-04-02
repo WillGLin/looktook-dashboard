@@ -12,7 +12,11 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="LookTook 营收测算", page_icon="📊", layout="wide")
 
 # ==================== 侧边栏参数配置 ====================
+st.sidebar.markdown('<p style="font-size:10px;color:#888;margin:0;padding:0;">向下滚动调整参数</p>', unsafe_allow_html=True)
+st.sidebar.button("🔄 重置全部参数", type="primary", use_container_width=True, disabled=True)
+st.sidebar.divider()
 st.sidebar.header("📐 全局参数配置")
+st.sidebar.caption("💡 刷新页面可重置所有参数为默认值")
 
 # --- 客流参数 ---
 st.sidebar.subheader("客流参数")
@@ -62,13 +66,15 @@ workshop_commission = st.sidebar.slider("Workshop分成比例 (D)", 0.10, 0.50, 
 st.sidebar.subheader("Workshop")
 workshop_ticket_price = st.sidebar.number_input("门票价格", value=55, step=1, key="ws_price")
 workshop_tickets_per_session = st.sidebar.number_input("每场销售票数", value=65, step=1, key="ws_tickets")
+workshop_attendance_rate = st.sidebar.slider("Workshop上座率", 0.50, 1.00, 0.75, 0.05, key="ws_attendance")
+workshop_actual_tickets = workshop_tickets_per_session * workshop_attendance_rate
 workshop_sessions = {
     "冬季": st.sidebar.slider("Workshop场次-冬", 0.0, 5.0, 1.0, 0.5, key="ws_winter"),
     "春季": st.sidebar.slider("Workshop场次-春", 0.0, 5.0, 1.5, 0.5, key="ws_spring"),
     "夏季": st.sidebar.slider("Workshop场次-夏", 0.0, 5.0, 2.0, 0.5, key="ws_summer"),
     "秋季": st.sidebar.slider("Workshop场次-秋", 0.0, 5.0, 1.5, 0.5, key="ws_autumn"),
 }
-workshop_per_session = workshop_ticket_price * workshop_tickets_per_session * workshop_commission
+workshop_per_session = workshop_ticket_price * workshop_actual_tickets * workshop_commission
 
 # --- C快闪岛 ---
 st.sidebar.subheader("C快闪岛")
@@ -93,11 +99,11 @@ daily_influx = {
 
 # --- 成本参数 ---
 st.sidebar.subheader("固定成本")
-daily_rent = st.sidebar.number_input("日租金 (¥)", value=5040, step=10, key="rent")
-monthly_property = st.sidebar.number_input("月物业费 (¥)", value=12600, step=100, key="property")
+daily_rent = st.sidebar.number_input("日租金 (¥)", value=333, step=10, key="rent")
 electricity_rate = st.sidebar.number_input("电费单价 (¥/㎡/天)", value=0.2, step=0.01, key="elec_rate")
 area = st.sidebar.number_input("商业面积 (㎡)", value=840, step=10, key="area")
 daily_electricity = electricity_rate * area
+daily_insurance = st.sidebar.number_input("商业保险 (¥/天)", value=92, step=10, key="insurance")
 
 st.sidebar.subheader("人工成本")
 staff_weekday = st.sidebar.number_input("工作日人数", value=2, step=1, key="staff_weekday")
@@ -109,17 +115,25 @@ st.sidebar.subheader("营销成本")
 monthly_marketing = st.sidebar.number_input("月营销基础 (¥)", value=5500, step=100, key="mkt_base")
 event_extra_cost = st.sidebar.number_input("活动日额外成本 (¥)", value=5000, step=100, key="mkt_event")
 
+st.sidebar.subheader("运营附加成本")
+payment_fee_rate = st.sidebar.slider("收款手续费率 (%)", 0.0, 2.0, 1.2, 0.1, key="payment_fee") / 100
+monthly_ops_cost = st.sidebar.number_input("运维耗材 (¥/月)", value=4500, step=100, key="ops_cost")
+
 # --- 郎园分成 ---
 st.sidebar.subheader("郎园分成")
 langyuan_share_rate = st.sidebar.slider("郎园分成比例", 0.05, 0.20, 0.10, 0.01, key="ly_share")
+langyuan_guarantee = st.sidebar.number_input("郎园保底额 (¥/月)", value=10000, step=1000, key="ly_guarantee")
+langyuan_extra_per_customer = st.sidebar.number_input("郎园额外收益客单价 (¥)", value=190, step=10, key="ly_extra_customer")
+langyuan_extra_rate = st.sidebar.slider("郎园引流抽成比例 (%)", 1.0, 20.0, 10.0, 0.5, key="ly_extra_rate") / 100
 
 # --- 一次性支出 ---
 st.sidebar.subheader("一次性支出")
 opening_cost = st.sidebar.number_input("开业宣传 (¥)", value=30000, step=1000, key="open_cost")
 hard_fitout_unit = st.sidebar.number_input("硬装单价 (¥/㎡)", value=4500, step=100, key="hard_fit")
 soft_fitout_unit = st.sidebar.number_input("软装单价 (¥/㎡)", value=0, step=100, key="soft_fit")
-langyuan_coverage = st.sidebar.number_input("郎园装修覆盖 (¥)", value=0, step=10000, key="ly_cover")
+langyuan_coverage = st.sidebar.number_input("郎园装修覆盖 (¥)", value=1000000, step=10000, key="ly_cover")
 
+# 郎园覆盖金额抵减LookTook投入（郎园覆盖减少LookTook实际出资）
 total_investment = opening_cost + (hard_fitout_unit + soft_fitout_unit) * area - langyuan_coverage
 hard_fitout_total = hard_fitout_unit * area
 soft_fitout_total = soft_fitout_unit * area
@@ -127,8 +141,8 @@ soft_fitout_total = soft_fitout_unit * area
 # ==================== 时间维度选择 ====================
 st.title("📊 LookTook 营收成本测算看板")
 view_tabs = st.tabs([
-    "📅 日均数据", "📆 月度数据", "🍂 季度数据",
-    "📅 年度数据", "🔍 全场景分析", "💸 一次性支出"
+    "📊 年度数据", "🍂 季度数据", "📆 月度数据",
+    "📅 日均数据", "🔍 全场景分析", "💸 一次性支出"
 ])
 
 # ==================== 计算函数 ====================
@@ -145,7 +159,8 @@ def calculate_daily(date_type, season, is_event):
     base = get_base_traffic(date_type)
     traffic = base * season_weights[season]
     entry = traffic * entry_rates[date_type]
-    c_bonus = island_bonus_people if date_type in ["周末", "峰值日"] else 0
+    # 快闪岛仅周末营业（五六日），峰值日若为工作日则不营业
+    c_bonus = island_bonus_people if date_type == "周末" else 0
     influx = event_influx[date_type] if is_event else daily_influx[date_type]
     total_entry = entry + c_bonus + influx
 
@@ -157,17 +172,24 @@ def calculate_daily(date_type, season, is_event):
     coffee_sales = coffee_conv_count * coffee_price
     coffee_comm = coffee_sales * coffee_commission
 
-    island_comm = island_daily_commission if date_type in ["周末", "峰值日"] else 0
+    island_comm = island_daily_commission if date_type == "周末" else 0
     workshop_daily = workshop_per_session * workshop_sessions[season] / 30
 
     gross_profit = retail_comm + coffee_comm + island_comm + workshop_daily
-    langyuan_share = gross_profit * langyuan_share_rate
+    # 郎园分成：日报不结算（设为0），按月统一结算
+    langyuan_share = 0
+    # 日报估算参考值：毛利×10%（仅供参考，最终按月结算）
+    langyuan_share_estimate = gross_profit * langyuan_share_rate
 
-    daily_prop = monthly_property / 30
+    # 收款手续费（按实际销售额收取）
+    total_sales_for_fee = retail_sales + coffee_sales + island_comm
+    payment_fee = total_sales_for_fee * payment_fee_rate
+
     daily_mkt = monthly_marketing / 30
+    daily_ops = monthly_ops_cost / 30
     daily_labor = staff_count[date_type] * staff_salary / 30
     extra_event = event_extra_cost if is_event else 0
-    total_cost = daily_rent + daily_prop + daily_electricity + daily_labor + daily_mkt + extra_event
+    total_cost = daily_rent + daily_electricity + daily_insurance + daily_labor + daily_mkt + daily_ops + payment_fee + extra_event
 
     net_profit = gross_profit - total_cost - langyuan_share
 
@@ -187,11 +209,14 @@ def calculate_daily(date_type, season, is_event):
         "Workshop日均": workshop_daily,
         "日毛利": gross_profit,
         "郎园分成": langyuan_share,
+        "郎园分成估算": langyuan_share_estimate,
         "日租金": daily_rent,
-        "日物管": daily_prop,
         "日电费": daily_electricity,
+        "日保险": daily_insurance,
         "日人工": daily_labor,
         "日营销基础": daily_mkt,
+        "日运维耗材": daily_ops,
+        "日收款手续费": payment_fee,
         "活动日额外": extra_event,
         "日总成本": total_cost,
         "日净利润": net_profit,
@@ -214,15 +239,27 @@ def calculate_monthly(season, has_event_weekday=False, has_event_weekend=False):
     }
 
     for key in ["总进店人数", "零售佣金", "咖啡佣金", "快闪岛佣金", "Workshop日均",
-                "日毛利", "郎园分成", "日总成本", "日净利润"]:
+                "日毛利", "日总成本", "日净利润"]:
         result[f"月{key.replace('日', '')}"] = (
             m_weekday[key] * weekday_days +
             m_weekend[key] * weekend_days +
             m_peak[key] * peak_weekend_days
         )
 
+    # 月郎园分成：佣金和保底取大
+    monthly_gross = m_weekday["日毛利"] * weekday_days + m_weekend["日毛利"] * weekend_days + m_peak["日毛利"] * peak_weekend_days
+    monthly_commission = monthly_gross * langyuan_share_rate
+    result["月郎园分成"] = max(monthly_commission, langyuan_guarantee)
+
     result["月活动额外成本"] = event_extra_cost * peak_weekend_days
     result["月净利润"] -= result["月活动额外成本"]
+
+    # 郎园额外收益：活动引流用户在郎园其他店的消费抽成
+    # 日额外收益 = 活动引流人数 × 客单价190 × 10%
+    extra_rev_wd = (event_influx["工作日"] if has_event_weekday else daily_influx["工作日"]) * langyuan_extra_per_customer * langyuan_extra_rate
+    extra_rev_we = (event_influx["周末"] if has_event_weekend else daily_influx["周末"]) * langyuan_extra_per_customer * langyuan_extra_rate
+    extra_rev_peak = event_influx["峰值日"] * langyuan_extra_per_customer * langyuan_extra_rate
+    result["月郎园额外收益"] = extra_rev_wd * weekday_days + extra_rev_we * weekend_days + extra_rev_peak * peak_weekend_days
 
     return result, m_weekday, m_weekend, m_peak
 
@@ -235,21 +272,24 @@ season_config = {
 }
 
 def compute_quarterly_data():
+    # 季度数据基于月度数据汇总（季度=3个月，月份按季节权重分配天数）
+    # 季节天数分配：冬季66工作日+24周末+0峰值，春季65+25+5，夏季57+28+5，秋季65+25+0
+    month_days = 30  # 每月按30天计算
     qdata = {}
     for season, cfg in season_config.items():
-        wd = calculate_daily("工作日", season, False)
-        we = calculate_daily("周末", season, False)
-        peak = calculate_daily("峰值日", season, True)
-        q_gross = wd["日毛利"] * cfg["wd"] + we["日毛利"] * cfg["we"] + peak["日毛利"] * cfg["peak"]
-        q_cost = wd["日总成本"] * cfg["wd"] + we["日总成本"] * cfg["we"] + peak["日总成本"] * cfg["peak"]
-        q_cost += event_extra_cost * cfg["event_peak"]
-        q_share = q_gross * langyuan_share_rate
+        # 按月计算（调用calculate_monthly获取含正确保底逻辑的月数据）
+        # 季节内各月参数一致，用False/False（工作日/周末均无活动）简化
+        monthly_result, _, _, _ = calculate_monthly(season, False, False)
+        season_gross = monthly_result["月毛利"] * (cfg["wd"] + cfg["we"] + cfg["peak"]) / month_days
+        season_cost = monthly_result["月总成本"] * (cfg["wd"] + cfg["we"] + cfg["peak"]) / month_days
+        season_cost += event_extra_cost * cfg["event_peak"]
+        season_share = monthly_result["月郎园分成"] * (cfg["wd"] + cfg["we"] + cfg["peak"]) / month_days
         qdata[season] = {
             "天数": cfg["wd"] + cfg["we"] + cfg["peak"],
-            "季度毛利": q_gross,
-            "季度成本": q_cost,
-            "季度分成": q_share,
-            "季度净利润": q_gross - q_cost - q_share,
+            "季度毛利": season_gross,
+            "季度成本": season_cost,
+            "季度分成": season_share,
+            "季度净利润": season_gross - season_cost - season_share,
         }
     return qdata
 
@@ -260,8 +300,263 @@ year_cost = sum(d["季度成本"] for d in quarterly_data.values())
 year_share = sum(d["季度分成"] for d in quarterly_data.values())
 year_net = sum(d["季度净利润"] for d in quarterly_data.values())
 
-# ==================== 日均数据 Tab ====================
+# ==================== 年度数据 Tab ====================
 with view_tabs[0]:
+    st.subheader("年度数据汇总")
+
+    # 计算年度郎园数据
+    langyuan_year_rent = daily_rent * year_days
+    langyuan_year_share = year_share  # already computed with guarantee
+    year_langyuan_extra = 0
+    for season, cfg in season_config.items():
+        monthly_result, _, _, _ = calculate_monthly(season, False, False)
+        ly_extra = monthly_result.get("月郎园额外收益", 0)
+        year_langyuan_extra += ly_extra * (cfg["wd"] + cfg["we"] + cfg["peak"]) / 30
+    langyuan_year_total = langyuan_year_rent + langyuan_year_share + year_langyuan_extra
+
+    # LookTook回本周期
+    looktook_payback = total_investment / (year_net / 12) if year_net > 0 else float('inf')
+    # 郎园回本周期
+    langyuan_investment = langyuan_coverage
+    langyuan_annual_income = langyuan_year_total
+    langyuan_payback = langyuan_investment / (langyuan_annual_income / 12) if langyuan_annual_income > 0 else float('inf')
+
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        st.markdown("### LookTook年度收益")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("年毛利", f"¥{year_gross:,.0f}")
+        col2.metric("年总成本", f"¥{year_cost:,.0f}")
+        col3.metric("年净利润", f"¥{year_net:,.0f}", delta=f"{year_net:,.0f}")
+        col4.metric("回本周期", f"{looktook_payback:.1f}个月" if year_net > 0 else "亏损中")
+
+        st.divider()
+        st.markdown("**📈 LookTook回本周期分析**")
+        col_inv1, col_inv2, col_inv3 = st.columns(3)
+        col_inv1.metric("LookTook总投资", f"¥{total_investment:,.0f}")
+        col_inv2.metric("月均净利润", f"¥{year_net/12:,.0f}")
+        col_inv3.metric("回本周期", f"{looktook_payback:.1f}个月" if year_net > 0 else "亏损中")
+
+    with col_right:
+        st.markdown("### 郎园年度收益")
+        col_ly1, col_ly2, col_ly3, col_ly4 = st.columns(4)
+        col_ly1.metric("年租金收入", f"¥{langyuan_year_rent:,.0f}")
+        col_ly2.metric("年分成/保底", f"¥{langyuan_year_share:,.0f}")
+        col_ly3.metric("年额外收益", f"¥{year_langyuan_extra:,.0f}")
+        col_ly4.metric("郎园年总收入", f"¥{langyuan_year_total:,.0f}")
+
+        st.divider()
+        st.markdown("**📈 郎园回本周期分析**")
+        col_ly_inv1, col_ly_inv2, col_ly_inv3 = st.columns(3)
+        col_ly_inv1.metric("郎园总投资", f"¥{langyuan_investment:,.0f}")
+        col_ly_inv2.metric("郎园月均收入", f"¥{langyuan_annual_income/12:,.0f}")
+        col_ly_inv3.metric("郎园回本周期", f"{langyuan_payback:.1f}个月" if langyuan_annual_income > 0 else "无收入")
+
+    st.divider()
+
+    year_summary = pd.DataFrame({
+        "项目": ["LookTook年毛利", "LookTook年总成本", "LookTook年净利润", "LookTook回本周期",
+                "郎园年租金", "郎园年分成/保底", "郎园年额外收益", "郎园年总收入", "郎园回本周期"],
+        "金额": [f"¥{year_gross:,.0f}", f"¥{year_cost:,.0f}", f"¥{year_net:,.0f}", f"{looktook_payback:.1f}个月" if year_net > 0 else "亏损",
+                f"¥{langyuan_year_rent:,.0f}", f"¥{langyuan_year_share:,.0f}", f"¥{year_langyuan_extra:,.0f}",
+                f"¥{langyuan_year_total:,.0f}", f"{langyuan_payback:.1f}个月" if langyuan_annual_income > 0 else "无收入"]
+    })
+    st.dataframe(year_summary, hide_index=True, use_container_width=True)
+
+    st.divider()
+
+    cumulative = [0]
+    for d in quarterly_data.values():
+        cumulative.append(cumulative[-1] + d["季度净利润"])
+
+    fig_cumulative = go.Figure()
+    fig_cumulative.add_trace(go.Scatter(
+        x=["Q0", "冬", "春", "夏", "秋"],
+        y=cumulative,
+        mode="lines+markers",
+        fill="tozeroy",
+        name="累计利润"
+    ))
+    fig_cumulative.update_layout(title="累计利润趋势", template="plotly_white")
+    st.plotly_chart(fig_cumulative, use_container_width=True)
+
+# ==================== 季度数据 Tab ====================
+with view_tabs[1]:
+    st.subheader("季度数据")
+
+    # 季度郎园额外收益预计算
+    month_days = 30
+    quarter_langyuan_extra = {}
+    for season, cfg in season_config.items():
+        monthly_result, _, _, _ = calculate_monthly(season, False, False)
+        ly_extra = monthly_result.get("月郎园额外收益", 0)
+        quarter_langyuan_extra[season] = ly_extra * (cfg["wd"] + cfg["we"] + cfg["peak"]) / month_days
+
+    col1, col2, col3, col4 = st.columns(4)
+    for i, (season, data) in enumerate(quarterly_data.items()):
+        with [col1, col2, col3, col4][i]:
+            st.metric(f"{season}", f"¥{data['季度净利润']:,.0f}", f"毛利¥{data['季度毛利']:,.0f}")
+
+    st.divider()
+
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        st.markdown("### LookTook季度收益")
+        fig_quarter = px.bar(
+            x=list(quarterly_data.keys()),
+            y=[d["季度净利润"] for d in quarterly_data.values()],
+            color=[d["季度净利润"] for d in quarterly_data.values()],
+            color_continuous_scale="RdYlGn",
+            labels={"x": "季节", "y": "季度净利润 (¥)"},
+            title="各季度净利润对比"
+        )
+        fig_quarter.update_layout(template="plotly_white")
+        st.plotly_chart(fig_quarter, use_container_width=True)
+
+        st.divider()
+        quarter_df = pd.DataFrame([
+            {"季节": s, "天数": d["天数"], "季度毛利": f"¥{d['季度毛利']:,.0f}",
+             "季度成本": f"¥{d['季度成本']:,.0f}", "郎园分成": f"¥{d['季度分成']:,.0f}",
+             "季度净利润": f"¥{d['季度净利润']:,.0f}"}
+            for s, d in quarterly_data.items()
+        ])
+        st.dataframe(quarter_df, hide_index=True, use_container_width=True)
+
+    with col_right:
+        st.markdown("### 郎园季度收益")
+        for season, cfg in season_config.items():
+            days = cfg["wd"] + cfg["we"] + cfg["peak"]
+            ly_rent = daily_rent * days
+            ly_share = quarterly_data[season]["季度分成"]
+            ly_extra = quarter_langyuan_extra[season]
+            ly_total = ly_rent + ly_share + ly_extra
+
+            st.markdown(f"**{season}**")
+            cols = st.columns(4)
+            cols[0].metric("租金", f"¥{ly_rent:,.0f}")
+            cols[1].metric("分成/保底", f"¥{ly_share:,.0f}")
+            cols[2].metric("额外收益", f"¥{ly_extra:,.0f}")
+            cols[3].metric("总收入", f"¥{ly_total:,.0f}")
+            st.divider()
+
+# ==================== 月度数据 Tab ====================
+with view_tabs[2]:
+    st.subheader("月度数据（按所选季节）")
+
+    month_season = st.selectbox("选择季节", list(season_weights.keys()), key="month_season")
+    has_event_wd = st.checkbox("工作日有活动", key="month_event_weekday")
+    has_event_we = st.checkbox("周末有活动（含峰值日）", key="month_event_weekend")
+
+    month_data, wd, we, peak = calculate_monthly(month_season, has_event_wd, has_event_we)
+
+    # 月郎园数据
+    ly_rent = daily_rent * month_data["天数"]
+    guarantee_monthly = langyuan_guarantee if langyuan_guarantee > 0 else 0
+    ly_share = month_data["月郎园分成"]
+    ly_extra = month_data.get("月郎园额外收益", 0)
+    ly_total = ly_rent + ly_share + ly_extra
+
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        st.markdown("### LookTook月度收益")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("天数", f"{month_data['天数']}天")
+        col2.metric("月毛利", f"¥{month_data['月毛利']:,.0f}")
+        col3.metric("月总成本", f"¥{month_data['月总成本']:,.0f}")
+        col4.metric("月净利润", f"¥{month_data['月净利润']:,.0f}", delta=f"{month_data['月净利润']:,.0f}")
+
+        st.divider()
+
+        month_summary = pd.DataFrame({
+            "日期类型": ["工作日", "周末", "峰值日", "合计"],
+            "天数": [month_data["工作日天数"], month_data["周末天数"], month_data["峰值天数"], month_data["天数"]],
+            "月毛利": [f"¥{wd['日毛利']*month_data['工作日天数']:,.0f}",
+                       f"¥{we['日毛利']*month_data['周末天数']:,.0f}",
+                       f"¥{peak['日毛利']*month_data['峰值天数']:,.0f}",
+                       f"¥{month_data['月毛利']:,.0f}"],
+            "月成本": [f"¥{wd['日总成本']*month_data['工作日天数']:,.0f}",
+                       f"¥{we['日总成本']*month_data['周末天数']:,.0f}",
+                       f"¥{peak['日总成本']*month_data['峰值天数']:,.0f}",
+                       f"¥{month_data['月总成本']:,.0f}"],
+            "月利润": [f"¥{wd['日净利润']*month_data['工作日天数']:,.0f}",
+                       f"¥{we['日净利润']*month_data['周末天数']:,.0f}",
+                       f"¥{peak['日净利润']*month_data['峰值天数']:,.0f}",
+                       f"¥{month_data['月净利润']:,.0f}"],
+        })
+        st.dataframe(month_summary, hide_index=True, use_container_width=True)
+
+        with st.expander("查看详细计算明细", expanded=False):
+            income_df = pd.DataFrame({
+                "日期类型": ["工作日", "周末", "峰值日"],
+                "日均毛利": [f"¥{wd['日毛利']:,.0f}", f"¥{we['日毛利']:,.0f}", f"¥{peak['日毛利']:,.0f}"],
+                "日均成本": [f"¥{wd['日总成本']:,.0f}", f"¥{we['日总成本']:,.0f}", f"¥{peak['日总成本']:,.0f}"],
+                "日均利润": [f"¥{wd['日净利润']:,.0f}", f"¥{we['日净利润']:,.0f}", f"¥{peak['日净利润']:,.0f}"],
+                "月毛利": [f"¥{wd['日毛利']*month_data['工作日天数']:,.0f}",
+                           f"¥{we['日毛利']*month_data['周末天数']:,.0f}",
+                           f"¥{peak['日毛利']*month_data['峰值天数']:,.0f}"],
+                "月成本": [f"¥{wd['日总成本']*month_data['工作日天数']:,.0f}",
+                           f"¥{we['日总成本']*month_data['周末天数']:,.0f}",
+                           f"¥{peak['日总成本']*month_data['峰值天数']:,.0f}"],
+                "月利润": [f"¥{wd['日净利润']*month_data['工作日天数']:,.0f}",
+                           f"¥{we['日净利润']*month_data['周末天数']:,.0f}",
+                           f"¥{peak['日净利润']*month_data['峰值天数']:,.0f}"],
+            })
+            st.dataframe(income_df, hide_index=True, use_container_width=True)
+
+            st.markdown("**收入构成**")
+            revenue_monthly = pd.DataFrame({
+                "收入项": ["零售佣金", "咖啡佣金", "快闪岛佣金", "Workshop"],
+                "月金额": [
+                    wd['零售佣金']*month_data['工作日天数'] + we['零售佣金']*month_data['周末天数'] + peak['零售佣金']*month_data['峰值天数'],
+                    wd['咖啡佣金']*month_data['工作日天数'] + we['咖啡佣金']*month_data['周末天数'] + peak['咖啡佣金']*month_data['峰值天数'],
+                    wd['快闪岛佣金']*month_data['工作日天数'] + we['快闪岛佣金']*month_data['周末天数'] + peak['快闪岛佣金']*month_data['峰值天数'],
+                    wd['Workshop日均']*month_data['工作日天数'] + we['Workshop日均']*month_data['周末天数'] + peak['Workshop日均']*month_data['峰值天数'],
+                ]
+            })
+            st.dataframe(revenue_monthly, hide_index=True, use_container_width=True)
+
+            st.markdown("**成本构成明细**")
+            wd_days = month_data["工作日天数"]
+            we_days = month_data["周末天数"]
+            peak_days = month_data["峰值天数"]
+            daily_ops = monthly_ops_cost / 30
+            cost_items = {
+                "日租金": daily_rent,
+                "日电费": daily_electricity,
+                "日保险": daily_insurance,
+                "日人工（工作日）": wd["日人工"],
+                "日人工（周末/峰值）": (we["日人工"] + peak["日人工"]) / 2,
+                "日营销基础": wd["日营销基础"],
+                "日运维耗材": daily_ops,
+                "日收款手续费": (wd["日收款手续费"] * wd_days + we["日收款手续费"] * we_days + peak["日收款手续费"] * peak_days) / month_data["天数"],
+                "活动日额外": peak["活动日额外"],
+            }
+            cost_monthly_items = pd.DataFrame({
+                "成本项": list(cost_items.keys()),
+                "日均": [f"¥{v:,.2f}" for v in cost_items.values()],
+                "月合计": [f"¥{v * (wd_days if "工作日" in k or k == "日租金" or k == "日电费" or k == "日保险" else (we_days if "周末" in k else peak_days)):,.0f}" if k != "日收款手续费" else f"¥{(wd["日收款手续费"]*wd_days + we["日收款手续费"]*we_days + peak["日收款手续费"]*peak_days):,.0f}" for k, v in cost_items.items()],
+            })
+            st.dataframe(cost_monthly_items, hide_index=True, use_container_width=True)
+
+
+    with col_right:
+        st.markdown("### 郎园月度收益")
+        col_ly1, col_ly2, col_ly3, col_ly4 = st.columns(4)
+        col_ly1.metric("月租金", f"¥{ly_rent:,.0f}")
+        col_ly2.metric("月分成/保底", f"¥{ly_share:,.0f}")
+        col_ly3.metric("月额外收益", f"¥{ly_extra:,.0f}")
+        col_ly4.metric("郎园月总收入", f"¥{ly_total:,.0f}")
+
+        st.divider()
+        st.markdown("**说明文案**")
+        st.caption("💡 郎园分成 = max(月毛利×10%, 保底额¥10,000)，按月结算")
+        st.caption("💡 郎园额外收益 = Σ(日活动引流人数 × ¥190 × 10%)，指LookTook活动引流用户在郎园园区其他店消费的流水抽成")
+
+# ==================== 日均数据 Tab ====================
+with view_tabs[3]:
     st.subheader("单日数据")
 
     col_sel1, col_sel2 = st.columns(2)
@@ -295,247 +590,36 @@ with view_tabs[0]:
     with col_right:
         st.markdown("**📉 成本构成**")
         cost_df = pd.DataFrame({
-            "成本项": ["日租金", "日物管", "日电费", "日人工", "日营销基础", "活动日额外"],
-            "金额": [m["日租金"], m["日物管"], m["日电费"], m["日人工"], m["日营销基础"], m["活动日额外"]]
+            "成本项": ["租金", "电费", "保险", "人工", "营销基础", "运维耗材", "收款手续费", "活动日额外"],
+            "金额": [m["日租金"], m["日电费"], m["日保险"], m["日人工"], m["日营销基础"], m["日运维耗材"], m["日收款手续费"], m["活动日额外"]]
         })
         fig_cost = px.bar(cost_df, x="成本项", y="金额", color="金额", color_continuous_scale="OrRd")
         fig_cost.update_layout(template="plotly_white", margin=dict(t=30, b=30))
         st.plotly_chart(fig_cost, use_container_width=True)
 
     st.divider()
-    st.markdown("**📋 完整计算明细**")
 
-    income_df = pd.DataFrame({
-        "指标": ["郎园日客流", "自然进店人数", "快闪岛加成", "活动引流", "总进店人数",
-                "零售成交人数", "零售销售额", "零售佣金", "咖啡成交人数", "咖啡销售额", "咖啡佣金",
-                "快闪岛佣金", "Workshop日均", "日毛利合计", "郎园分成"],
-        "数值": [f"{m[k]:,.1f}" for k in ["郎园日客流", "自然进店", "快闪岛加成", "活动引流",
-                                          "总进店人数", "零售成交人数", "零售销售额", "零售佣金",
-                                          "咖啡成交人数", "咖啡销售额", "咖啡佣金", "快闪岛佣金",
-                                          "Workshop日均", "日毛利", "郎园分成"]]
-    })
-    cost_df_full = pd.DataFrame({
-        "指标": ["日租金", "日物管", "日电费", "日人工", "日营销基础", "活动日额外", "日总成本", "郎园分成", "日净利润"],
-        "数值": [f"¥{m[k]:,.2f}" for k in ["日租金", "日物管", "日电费", "日人工",
-                                            "日营销基础", "活动日额外", "日总成本", "郎园分成", "日净利润"]]
-    })
+    with st.expander("查看详细计算明细", expanded=False):
+        income_df = pd.DataFrame({
+            "指标": ["郎园日客流", "自然进店人数", "快闪岛加成", "活动引流", "总进店人数",
+                    "零售成交人数", "零售销售额", "零售佣金", "咖啡成交人数", "咖啡销售额", "咖啡佣金",
+                    "快闪岛佣金", "Workshop日均", "日毛利合计"],
+            "数值": [f"{m[k]:,.1f}" for k in ["郎园日客流", "自然进店", "快闪岛加成", "活动引流",
+                                              "总进店人数", "零售成交人数", "零售销售额", "零售佣金",
+                                              "咖啡成交人数", "咖啡销售额", "咖啡佣金", "快闪岛佣金",
+                                              "Workshop日均", "日毛利"]]
+        })
+        cost_df_full = pd.DataFrame({
+            "指标": ["日租金", "日电费", "日保险", "日人工", "日营销基础", "日运维耗材", "日收款手续费", "活动日额外", "日总成本", "日净利润"],
+            "数值": [f"¥{m[k]:,.2f}" for k in ["日租金", "日电费", "日保险", "日人工",
+                                                "日营销基础", "日运维耗材", "日收款手续费", "活动日额外", "日总成本", "日净利润"]]
+        })
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.dataframe(income_df, hide_index=True, use_container_width=True)
-    with col2:
-        st.dataframe(cost_df_full, hide_index=True, use_container_width=True)
-
-    st.divider()
-    st.markdown("**🏢 郎园日收益**")
-    langyuan_daily_rent = daily_rent
-    langyuan_daily_property = monthly_property / 30
-    langyuan_daily_share = m["日毛利"] * langyuan_share_rate
-    langyuan_daily_total = langyuan_daily_rent + langyuan_daily_property + langyuan_daily_share
-
-    col_ly1, col_ly2, col_ly3, col_ly4 = st.columns(4)
-    col_ly1.metric("日租金", f"¥{langyuan_daily_rent:,.0f}")
-    col_ly2.metric("日物业", f"¥{langyuan_daily_property:,.0f}")
-    col_ly3.metric("日分成", f"¥{langyuan_daily_share:,.0f}")
-    col_ly4.metric("郎园日总收入", f"¥{langyuan_daily_total:,.0f}")
-
-# ==================== 月度数据 Tab ====================
-with view_tabs[1]:
-    st.subheader("月度数据（按所选季节）")
-
-    month_season = st.selectbox("选择季节", list(season_weights.keys()), key="month_season")
-    has_event_wd = st.checkbox("工作日有活动", key="month_event_weekday")
-    has_event_we = st.checkbox("周末有活动（含峰值日）", key="month_event_weekend")
-
-    month_data, wd, we, peak = calculate_monthly(month_season, has_event_wd, has_event_we)
-
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("月总天数", f"{month_data['天数']}天")
-    col2.metric("月毛利", f"¥{month_data['月毛利']:,.0f}")
-    col3.metric("月总成本", f"¥{month_data['月总成本']:,.0f}")
-    col4.metric("月净利润", f"¥{month_data['月净利润']:,.0f}", delta=f"{month_data['月净利润']:,.0f}")
-
-    st.divider()
-
-    col_info1, col_info2, col_info3 = st.columns(3)
-    with col_info1:
-        st.metric("工作日日均毛利", f"¥{wd['日毛利']:,.0f}")
-        st.metric("工作日日均成本", f"¥{wd['日总成本']:,.0f}")
-        st.metric("工作日日均利润", f"¥{wd['日净利润']:,.0f}")
-    with col_info2:
-        st.metric("周末日均毛利", f"¥{we['日毛利']:,.0f}")
-        st.metric("周末日均成本", f"¥{we['日总成本']:,.0f}")
-        st.metric("周末日均利润", f"¥{we['日净利润']:,.0f}")
-    with col_info3:
-        st.metric("峰值日均毛利", f"¥{peak['日毛利']:,.0f}")
-        st.metric("峰值日均成本", f"¥{peak['日总成本']:,.0f}")
-        st.metric("峰值日均利润", f"¥{peak['日净利润']:,.0f}")
-
-    st.divider()
-
-    month_summary = pd.DataFrame({
-        "日期类型": ["工作日", "周末", "峰值日", "合计"],
-        "天数": [month_data["工作日天数"], month_data["周末天数"], month_data["峰值天数"], month_data["天数"]],
-        "日均毛利": [f"¥{wd['日毛利']:,.0f}", f"¥{we['日毛利']:,.0f}", f"¥{peak['日毛利']:,.0f}", "-"],
-        "日均成本": [f"¥{wd['日总成本']:,.0f}", f"¥{we['日总成本']:,.0f}", f"¥{peak['日总成本']:,.0f}", "-"],
-        "日均利润": [f"¥{wd['日净利润']:,.0f}", f"¥{we['日净利润']:,.0f}", f"¥{peak['日净利润']:,.0f}", "-"],
-        "月毛利": [f"¥{wd['日毛利']*month_data['工作日天数']:,.0f}",
-                   f"¥{we['日毛利']*month_data['周末天数']:,.0f}",
-                   f"¥{peak['日毛利']*month_data['峰值天数']:,.0f}",
-                   f"¥{month_data['月毛利']:,.0f}"],
-        "月成本": [f"¥{wd['日总成本']*month_data['工作日天数']:,.0f}",
-                   f"¥{we['日总成本']*month_data['周末天数']:,.0f}",
-                   f"¥{peak['日总成本']*month_data['峰值天数']:,.0f}",
-                   f"¥{month_data['月总成本']:,.0f}"],
-        "月利润": [f"¥{wd['日净利润']*month_data['工作日天数']:,.0f}",
-                   f"¥{we['日净利润']*month_data['周末天数']:,.0f}",
-                   f"¥{peak['日净利润']*month_data['峰值天数']:,.0f}",
-                   f"¥{month_data['月净利润']:,.0f}"],
-    })
-    st.dataframe(month_summary, hide_index=True, use_container_width=True)
-
-    st.divider()
-    st.markdown("**🏢 郎园月度收入**")
-    langyuan_rent = daily_rent * month_data["天数"]
-    langyuan_property = monthly_property
-    langyuan_share = month_data["月毛利"] * langyuan_share_rate
-    langyuan_total = langyuan_rent + langyuan_property + langyuan_share
-
-    col_ly1, col_ly2, col_ly3, col_ly4 = st.columns(4)
-    col_ly1.metric("月租金", f"¥{langyuan_rent:,.0f}")
-    col_ly2.metric("月物业", f"¥{langyuan_property:,.0f}")
-    col_ly3.metric("月分成", f"¥{langyuan_share:,.0f}")
-    col_ly4.metric("郎园月总收入", f"¥{langyuan_total:,.0f}")
-
-# ==================== 季度数据 Tab ====================
-with view_tabs[2]:
-    st.subheader("季度数据")
-
-    col1, col2, col3, col4 = st.columns(4)
-    for i, (season, data) in enumerate(quarterly_data.items()):
-        with [col1, col2, col3, col4][i]:
-            st.metric(f"{season}", f"¥{data['季度净利润']:,.0f}", f"毛利¥{data['季度毛利']:,.0f}")
-
-    st.divider()
-
-    quarter_df = pd.DataFrame([
-        {"季节": s, "天数": d["天数"], "季度毛利": f"¥{d['季度毛利']:,.0f}",
-         "季度成本": f"¥{d['季度成本']:,.0f}", "郎园分成": f"¥{d['季度分成']:,.0f}",
-         "季度净利润": f"¥{d['季度净利润']:,.0f}"}
-        for s, d in quarterly_data.items()
-    ])
-    st.dataframe(quarter_df, hide_index=True, use_container_width=True)
-
-    fig_quarter = px.bar(
-        x=list(quarterly_data.keys()),
-        y=[d["季度净利润"] for d in quarterly_data.values()],
-        color=[d["季度净利润"] for d in quarterly_data.values()],
-        color_continuous_scale="RdYlGn",
-        labels={"x": "季节", "y": "季度净利润 (¥)"},
-        title="各季度净利润对比"
-    )
-    fig_quarter.update_layout(template="plotly_white")
-    st.plotly_chart(fig_quarter, use_container_width=True)
-
-    st.divider()
-    st.markdown("**🏢 郎园季度收入**")
-
-    for season, cfg in season_config.items():
-        days = cfg["wd"] + cfg["we"] + cfg["peak"]
-        ly_rent = daily_rent * days
-        ly_prop = monthly_property * 3
-        ly_share = quarterly_data[season]["季度毛利"] * langyuan_share_rate
-        ly_total = ly_rent + ly_prop + ly_share
-
-        cols = st.columns(4)
-        cols[0].metric(f"{season}-租金", f"¥{ly_rent:,.0f}")
-        cols[1].metric(f"{season}-物业", f"¥{ly_prop:,.0f}")
-        cols[2].metric(f"{season}-分成", f"¥{ly_share:,.0f}")
-        cols[3].metric(f"{season}-总收入", f"¥{ly_total:,.0f}")
-        st.divider()
-
-# ==================== 年度数据 Tab ====================
-with view_tabs[3]:
-    st.subheader("年度数据汇总")
-
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("全年营业天数", f"{year_days}天")
-    col2.metric("年毛利", f"¥{year_gross:,.0f}")
-    col3.metric("年总成本", f"¥{year_cost:,.0f}")
-    col4.metric("年净利润", f"¥{year_net:,.0f}", delta=f"{year_net:,.0f}")
-
-    st.divider()
-
-    st.markdown("**🏢 郎园年度收入**")
-    langyuan_year_rent = daily_rent * year_days
-    langyuan_year_property = monthly_property * 12
-    langyuan_year_share = year_gross * langyuan_share_rate
-    langyuan_year_total = langyuan_year_rent + langyuan_year_property + langyuan_year_share
-
-    col_ly1, col_ly2, col_ly3, col_ly4 = st.columns(4)
-    col_ly1.metric("年租金收入", f"¥{langyuan_year_rent:,.0f}")
-    col_ly2.metric("年物业收入", f"¥{langyuan_year_property:,.0f}")
-    col_ly3.metric("年分成收入", f"¥{langyuan_year_share:,.0f}")
-    col_ly4.metric("郎园年总收入", f"¥{langyuan_year_total:,.0f}")
-
-    st.divider()
-    st.markdown("**📈 回本周期分析**")
-
-    # 郎园
-    langyuan_investment = langyuan_coverage
-    langyuan_annual_income = langyuan_year_total
-    langyuan_payback = langyuan_investment / (langyuan_annual_income / 12) if langyuan_annual_income > 0 else float('inf')
-
-    # LookTook
-    looktook_payback = total_investment / (year_net / 12) if year_net > 0 else float('inf')
-
-    col_inv1, col_inv2, col_inv3 = st.columns(3)
-    with col_inv1:
-        st.metric("LookTook总投资", f"¥{total_investment:,.0f}")
-    with col_inv2:
-        st.metric("月均净利润", f"¥{year_net/12:,.0f}")
-    with col_inv3:
-        if year_net > 0:
-            st.metric("LookTook回本周期", f"{looktook_payback:.1f}个月")
-        else:
-            st.metric("LookTook回本周期", "亏损中")
-
-    col_ly_inv1, col_ly_inv2, col_ly_inv3 = st.columns(3)
-    with col_ly_inv1:
-        st.metric("郎园总投资", f"¥{langyuan_investment:,.0f}")
-    with col_ly_inv2:
-        st.metric("郎园月均收入", f"¥{langyuan_annual_income/12:,.0f}")
-    with col_ly_inv3:
-        if langyuan_annual_income > 0:
-            st.metric("郎园回本周期", f"{langyuan_payback:.1f}个月")
-        else:
-            st.metric("郎园回本周期", "无收入")
-
-    st.divider()
-    cumulative = [0]
-    for d in quarterly_data.values():
-        cumulative.append(cumulative[-1] + d["季度净利润"])
-
-    fig_cumulative = go.Figure()
-    fig_cumulative.add_trace(go.Scatter(
-        x=["Q0", "冬", "春", "夏", "秋"],
-        y=cumulative,
-        mode="lines+markers",
-        fill="tozeroy",
-        name="累计利润"
-    ))
-    fig_cumulative.update_layout(title="累计利润趋势", template="plotly_white")
-    st.plotly_chart(fig_cumulative, use_container_width=True)
-
-    st.divider()
-    year_summary = pd.DataFrame({
-        "项目": ["年毛利", "郎园分成", "年总成本", "年净利润",
-                "郎园年租金", "郎园年物业", "郎园年分成", "郎园年总收入"],
-        "金额": [f"¥{year_gross:,.0f}", f"¥{year_share:,.0f}", f"¥{year_cost:,.0f}", f"¥{year_net:,.0f}",
-                f"¥{langyuan_year_rent:,.0f}", f"¥{langyuan_year_property:,.0f}",
-                f"¥{langyuan_year_share:,.0f}", f"¥{langyuan_year_total:,.0f}"]
-    })
-    st.dataframe(year_summary, hide_index=True, use_container_width=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.dataframe(income_df, hide_index=True, use_container_width=True)
+        with col2:
+            st.dataframe(cost_df_full, hide_index=True, use_container_width=True)
 
 # ==================== 全场景敏感性分析 Tab ====================
 with view_tabs[4]:
@@ -603,44 +687,68 @@ with view_tabs[5]:
 
     st.divider()
 
-    col_inv1, col_inv2 = st.columns(2)
-    with col_inv1:
+    # 郎园年度数据（用于回本计算）
+    langyuan_year_rent = daily_rent * year_days
+    langyuan_year_share = year_share
+    year_langyuan_extra = 0
+    for season, cfg in season_config.items():
+        monthly_result, _, _, _ = calculate_monthly(season, False, False)
+        ly_extra = monthly_result.get("月郎园额外收益", 0)
+        year_langyuan_extra += ly_extra * (cfg["wd"] + cfg["we"] + cfg["peak"]) / 30
+    langyuan_year_total = langyuan_year_rent + langyuan_year_share + year_langyuan_extra
+
+    langyuan_investment = langyuan_coverage
+    langyuan_annual_income = langyuan_year_total
+    langyuan_payback = langyuan_investment / (langyuan_annual_income / 12) if langyuan_annual_income > 0 else float('inf')
+    looktook_payback = total_investment / (year_net / 12) if year_net > 0 else float('inf')
+
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        st.markdown("### LookTook投入")
         st.metric("LookTook总投入", f"¥{total_investment:,.0f}")
-        st.caption(f"= 硬装¥{hard_fitout_total:,.0f} + 软装¥{soft_fitout_total:,.0f} + 开业¥{opening_cost:,.0f} - 郎园覆盖¥{langyuan_coverage:,.0f}")
-    with col_inv2:
         if year_net > 0:
             st.metric("LookTook回本周期", f"{looktook_payback:.1f}个月")
         else:
             st.metric("LookTook回本周期", "亏损中")
+        st.caption(f"= 硬装¥{hard_fitout_total:,.0f} + 软装¥{soft_fitout_total:,.0f} + 开业¥{opening_cost:,.0f} - 郎园覆盖¥{langyuan_coverage:,.0f}")
         st.caption(f"月均净利润¥{year_net/12:,.0f}（扣除郎园分成后）")
 
+        st.divider()
+        st.markdown("**📊 LookTook支出构成**")
+        investment_data = pd.DataFrame({
+            "支出项": ["硬装", "软装", "开业宣传"],
+            "金额": [hard_fitout_total, soft_fitout_total, opening_cost],
+        })
+        investment_data["占比"] = (investment_data["金额"] / total_investment * 100)
+        investment_data["标签"] = investment_data.apply(
+            lambda r: f"¥{r['金额']:,.0f} ({r['占比']:.1f}%)", axis=1
+        )
+        fig_inv = px.pie(
+            investment_data,
+            values="金额", names="支出项",
+            title="LookTook一次性支出构成"
+        )
+        fig_inv.update_layout(template="plotly_white")
+        st.plotly_chart(fig_inv, use_container_width=True)
+
+    with col_right:
+        st.markdown("### 郎园投入")
+        st.metric("郎园投入", f"¥{langyuan_coverage:,.0f}")
+        st.caption("郎园装修覆盖金额（郎园承担）")
+        if langyuan_annual_income > 0:
+            st.metric("郎园回本周期", f"{langyuan_payback:.1f}个月")
+        else:
+            st.metric("郎园回本周期", "无收入")
+        st.caption(f"月均收入¥{langyuan_annual_income/12:,.0f}")
+
     st.divider()
-    st.markdown("**📊 支出构成**")
 
-    investment_data = pd.DataFrame({
-        "支出项": ["硬装", "软装", "开业宣传", "郎园覆盖抵扣", "LookTook净投入"],
-        "金额": [hard_fitout_total, soft_fitout_total, opening_cost, -langyuan_coverage, total_investment],
-    })
-    investment_data["占比"] = (investment_data["金额"] / total_investment * 100).abs()
-    investment_data.loc[investment_data["支出项"] == "郎园覆盖抵扣", "占比"] = 0
-    investment_data["标签"] = investment_data.apply(
-        lambda r: f"¥{abs(r['金额']):,.0f} ({r['占比']:.1f}%)" if r['金额'] != 0 else "-", axis=1
-    )
-
-    fig_inv = px.pie(
-        investment_data[investment_data["金额"] > 0],
-        values="金额", names="支出项",
-        title="LookTook一次性支出构成"
-    )
-    fig_inv.update_layout(template="plotly_white")
-    st.plotly_chart(fig_inv, use_container_width=True)
-
-    st.divider()
     invest_detail = pd.DataFrame({
-        "项目": ["商业面积", "硬装单价", "硬装合计", "软装单价", "软装合计", "开业宣传", "郎园装修覆盖", "LookTook净投入"],
+        "项目": ["商业面积", "硬装单价", "硬装合计", "软装单价", "软装合计", "开业宣传", "郎园装修覆盖（郎园出资）", "LookTook总投入"],
         "数值/金额": [f"{area} ㎡", f"¥{hard_fitout_unit:,}/㎡", f"¥{hard_fitout_total:,}",
                      f"¥{soft_fitout_unit:,}/㎡", f"¥{soft_fitout_total:,}",
-                     f"¥{opening_cost:,}", f"-¥{langyuan_coverage:,}", f"¥{total_investment:,}"],
+                     f"¥{opening_cost:,}", f"¥{langyuan_coverage:,}", f"¥{total_investment:,}"],
     })
     st.dataframe(invest_detail, hide_index=True, use_container_width=True)
 
@@ -649,6 +757,7 @@ with view_tabs[5]:
     st.info("""
     - **硬装**：硬件搭建、装修、材料、通水电、简单内装（¥4,500/㎡参考价）
     - **软装**：可调节/可移动的设施配置（目前待确认）
-    - **郎园覆盖**：郎园可能承担的部分装修费用，需谈判确认
-    - 回本周期 = LookTook总投入 / 月均净利润（扣除郎园分成后）
+    - **郎园装修覆盖**：郎园可能承担的装修费用，从LookTook总投入中抵扣
+    - LookTook回本周期 = LookTook总投入 / 月均净利润（扣除郎园分成后）
+    - 郎园回本周期 = 郎园投入 / 月均郎园收入
     """)
