@@ -129,7 +129,7 @@ st.sidebar.subheader("一次性支出")
 opening_cost = st.sidebar.number_input("开业宣传 (¥)", value=30000, step=1000, key="open_cost")
 hard_fitout_unit = st.sidebar.number_input("硬装单价 (¥/㎡)", value=2274, step=100, key="hard_fit")
 soft_fitout_unit = st.sidebar.number_input("软装单价 (¥/㎡)", value=1236.66, step=0.01, key="soft_fit")
-langyuan_coverage = st.sidebar.number_input("郎园装修覆盖 (¥)", value=1000000, step=10000, key="ly_cover")
+langyuan_coverage = st.sidebar.number_input("郎园装修覆盖 (¥)", value=1500000, step=10000, key="ly_cover")
 
 # 郎园覆盖金额抵减LookTook投入（郎园覆盖减少LookTook实际出资）
 total_investment = opening_cost + (hard_fitout_unit + soft_fitout_unit) * area - langyuan_coverage
@@ -159,7 +159,6 @@ def calculate_daily(date_type, season, is_event):
     base = get_base_traffic(date_type)
     traffic = base * season_weights[season]
     entry = traffic * entry_rates[date_type]
-    # 快闪岛仅周末营业（五六日），峰值日若为工作日则不营业
     c_bonus = island_bonus_people if date_type == "周末" else 0
     influx = event_influx[date_type] if is_event else daily_influx[date_type]
     total_entry = entry + c_bonus + influx
@@ -176,12 +175,9 @@ def calculate_daily(date_type, season, is_event):
     workshop_daily = workshop_per_session * workshop_sessions[season] / 30
 
     gross_profit = retail_comm + coffee_comm + island_comm + workshop_daily
-    # 郎园分成：日报不结算（设为0），按月统一结算
     langyuan_share = 0
-    # 日报估算参考值：毛利×10%（仅供参考，最终按月结算）
     langyuan_share_estimate = gross_profit * langyuan_share_rate
 
-    # 收款手续费（按实际销售额收取）
     total_sales_for_fee = retail_sales + coffee_sales + island_comm
     payment_fee = total_sales_for_fee * payment_fee_rate
 
@@ -246,7 +242,6 @@ def calculate_monthly(season, has_event_weekday=False, has_event_weekend=False):
             m_peak[key] * peak_weekend_days
         )
 
-    # 月郎园分成或保底：两者取大（互斥，生意好交分成，生意差交保底）
     monthly_gross = m_weekday["日毛利"] * weekday_days + m_weekend["日毛利"] * weekend_days + m_peak["日毛利"] * peak_weekend_days
     monthly_commission = monthly_gross * langyuan_share_rate
     result["月郎园分成或保底"] = max(monthly_commission, langyuan_guarantee)
@@ -254,7 +249,6 @@ def calculate_monthly(season, has_event_weekday=False, has_event_weekend=False):
     result["月活动额外成本"] = event_extra_cost * peak_weekend_days
     result["月净利润"] -= result["月活动额外成本"]
 
-    # 郎园额外收益：活动引流用户在郎园其他店的消费抽成
     extra_rev_wd = (event_influx["工作日"] if has_event_weekday else daily_influx["工作日"]) * langyuan_extra_per_customer * langyuan_extra_rate
     extra_rev_we = (event_influx["周末"] if has_event_weekend else daily_influx["周末"]) * langyuan_extra_per_customer * langyuan_extra_rate
     extra_rev_peak = event_influx["峰值日"] * langyuan_extra_per_customer * langyuan_extra_rate
@@ -262,7 +256,6 @@ def calculate_monthly(season, has_event_weekday=False, has_event_weekend=False):
 
     return result, m_weekday, m_weekend, m_peak
 
-# 各季节天数定义（用于季度汇总）
 season_config = {
     "冬季": {"wd": 66, "we": 24, "peak": 0, "event_peak": 0},
     "春季": {"wd": 65, "we": 25, "peak": 5, "event_peak": 3},
@@ -374,6 +367,7 @@ with view_tabs[0]:
 # ==================== 季度数据 Tab ====================
 with view_tabs[1]:
     st.subheader("季度数据")
+
 
     month_days = 30
     quarter_langyuan_extra = {}
@@ -532,6 +526,7 @@ with view_tabs[2]:
         col_ly2.metric("月额外收益", f"¥{ly_extra:,.0f}")
         col_ly3.metric("郎园月总收入", f"¥{ly_total:,.0f}")
 
+
         st.divider()
         st.markdown("**说明文案**")
         st.caption("💡 郎园分成或保底 = max(月毛利×10%, 保底额¥10,000)，按月结算")
@@ -603,6 +598,7 @@ with view_tabs[3]:
         with col2:
             st.dataframe(cost_df_full, hide_index=True, use_container_width=True)
 
+
 # ==================== 全场景敏感性分析 Tab ====================
 with view_tabs[4]:
     st.subheader("12种场景敏感性分析")
@@ -641,6 +637,7 @@ with view_tabs[4]:
 
     st.divider()
     st.markdown("**🔥 净利润热力图**")
+
 
     pivot_data = scenario_df.pivot_table(
         values="日净利润", index="季节", columns=["类型", "活动"], aggfunc="sum"
